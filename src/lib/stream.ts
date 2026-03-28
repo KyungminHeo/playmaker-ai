@@ -1,0 +1,95 @@
+/**
+ * Claude Streaming 응답 파싱 유틸리티
+ *
+ * Anthropic SDK의 Streaming 응답은 SSE(Server-Sent Events) 형식으로 전달됨.
+ * 이 유틸리티는 SSE 스트림을 읽어서 텍스트 토큰을 하나씩 추출하고,
+ * 콜백 함수로 실시간 업데이트를 전달.
+ */
+
+/**
+ * Streaming 응답에서 텍스트를 실시간으로 읽어오는 함수
+ *
+ * @param response - fetch()의 응답 (Streaming)
+ * @param onPartial - 토큰이 올 때마다 호출되는 콜백 (현재까지 누적된 텍스트 전달)
+ * @returns 완성된 전체 텍스트
+ */
+export async function readStream(
+  response: Response,
+  onPartial?: (text: string) => void
+): Promise<string> {
+  if (!response.body) {
+    return response.text();
+  }
+
+  const reader = response.body.getReader();     // ReadableStream 리더
+  const decoder = new TextDecoder();             // 바이트 → 문자열 디코더
+  let accumulated = "";                          // 누적 텍스트
+  let buffer = "";                               // 미처리 버퍼
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // SSE 이벤트는 빈 줄("\n\n")로 구분됨
+    const events = buffer.split("\n\n");
+    buffer = events.pop() || "";
+
+    for (const event of events) {
+      const lines = event.split("\n");
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            // "content_block_delta" 이벤트에서 실제 텍스트 토큰 추출
+            if (data.type === "content_block_delta" && data.delta?.text) {
+              accumulated += data.delta.text;
+              onPartial?.(accumulated); // UI 실시간 업데이트
+            }
+          } catch {
+            // JSON 파싱 실패 무시 (다른 이벤트 타입)
+          }
+        }
+      }
+    }
+  }
+
+  return accumulated;
+}
+
+/**
+ * Claude 응답에서 JSON 추출
+ * Claude가 JSON 앞뒤에 텍스트를 붙이는 경우 대비
+ */
+export function extractJSON<T>(text: string): T {
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    return JSON.parse(codeBlockMatch[1].trim());
+  }
+
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start !== -1 && end !== -1) {
+    return JSON.parse(text.slice(start, end + 1));
+  }
+
+  throw new Error("응답에서 JSON을 찾을 수 없습니다.");
+}
+
+/**
+ * Claude 응답에서 HTML 코드 추출
+ * ```html ... ``` 코드블록에서 HTML을 꺼냄
+ */
+export function extractHTML(text: string): string {
+  const match = text.match(/```html\s*([\s\S]*?)```/);
+  if (match) {
+    return match[1].trim();
+  }
+
+  if (text.includes("<!DOCTYPE") || text.includes("<html")) {
+    return text.trim();
+  }
+
+  throw new Error("응답에서 HTML 코드를 찾을 수 없습니다.");
+}
