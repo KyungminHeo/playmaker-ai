@@ -5,7 +5,9 @@
 
 ---
 
-## 1. 프로젝트 시작
+## Day 1 — 프로젝트 셋업 + API + 기본 UI
+
+### 1. 프로젝트 시작
 
 ```
 PlayMaker AI라는 웹앱을 만들어줘.
@@ -18,9 +20,7 @@ AI는 Claude API만 쓸 거야 (Anthropic SDK). 다른 AI API는 과금 안 돼 
 모든 프론트엔드 코드에 한국어 주석을 상세하게 달아줘. 내가 프론트엔드에 약해서 주석 없으면 이해가 어려워.
 ```
 
----
-
-## 2. 전체 플로우 설계
+### 2. 전체 플로우 설계
 
 ```
 전체 플로우는 하나의 페이지에서 step 상태로 관리해줘.
@@ -36,9 +36,7 @@ AI는 Claude API만 쓸 거야 (Anthropic SDK). 다른 AI API는 과금 안 돼 
 광고 톤은 긴장감/귀여움/성취감/유머 4개 중 선택.
 ```
 
----
-
-## 3. API 설계
+### 3. API 설계
 
 ```
 API는 3개야. 전부 Streaming으로 해줘.
@@ -59,9 +57,7 @@ Streaming이면 토큰 흐르는 동안 연결 끊기지 않아서 타임아웃 
    - max_tokens 8192로 넉넉하게
 ```
 
----
-
-## 4. 프롬프트 템플릿
+### 4. 프롬프트 템플릿
 
 ```
 lib/prompts.ts에 장르별 프롬프트 템플릿을 만들어줘.
@@ -84,9 +80,7 @@ HTML 생성 프롬프트: "플레이어블 광고 전문 HTML5 게임 개발자"
 "TAP TO START" 오버레이, 터치 이벤트는 touchstart/touchend 사용
 ```
 
----
-
-## 5. Streaming 파싱
+### 5. Streaming 파싱
 
 ```
 클라이언트에서 Streaming 응답을 파싱하는 유틸리티 만들어줘.
@@ -104,9 +98,7 @@ extractHTML 함수:
 - ```html 코드블록에서 HTML 추출
 ```
 
----
-
-## 6. UI 컴포넌트
+### 6. UI 컴포넌트
 
 ```
 컴포넌트 4개 만들어줘. shadcn/ui 컴포넌트 활용해서.
@@ -136,9 +128,7 @@ extractHTML 함수:
    - 파일 크기 표시
 ```
 
----
-
-## 7. 빌드 확인
+### 7. 빌드 확인
 
 ```
 npm run build 에러 없는지 확인해줘.
@@ -146,12 +136,150 @@ npm run build 에러 없는지 확인해줘.
 .env.local.example 파일도 만들어둬.
 ```
 
----
-
-## 8. README 작성
+### 8. README 작성
 
 ```
 README.md를 최대한 상세하게 작성해줘.
 제목, 구현목적, 아키텍처, 사용기술, 구동방법 포함하고
 API 명세, 프로젝트 구조, 비용 예상도 넣어줘.
+```
+
+---
+
+## Day 2 — 프롬프트 튜닝 + UI 개선
+
+### 9. 프롬프트 아키텍처 리팩토링
+
+```
+지금 프롬프트 구조에 문제가 있어.
+훅 시나리오를 아무리 잘 써도 getGeneratePrompt에서 GENRE_INTERACTION_GUIDE가 너무 강해서
+결과물이 다 비슷하게 나와. 훅 시나리오가 사실상 무시되고 있어.
+
+이렇게 바꿔줘:
+
+1. HookScenario 타입에 gameplay_modifier와 visual_modifier 필드를 추가해.
+   - AI가 훅 시나리오 짤 때 "이 시나리오를 코드로 구현하려면 장르 규칙을 어떻게 변경해야 하는지"를
+     구체적으로 작성하게 유도하는 거야.
+
+2. getHooksPrompt에서 AI 역할을 "크리에이티브 디렉터 + 테크니컬 기획자"로 바꾸고,
+   JSON에 gameplay_modifier, visual_modifier 필드를 필수로 넣어줘.
+
+3. getGeneratePrompt를 System Prompt + User Prompt로 분리해.
+   - System: 역할, 코딩 표준, 레퍼런스 코드 패턴, 장르 가이드 (기본 뼈대)
+   - User: OVERRIDES 섹션 (modifier가 장르 가이드보다 우선), 게임 정보, 출력 지시
+
+4. generate API에서 hook 객체를 통째로 넘기도록 변경.
+   hookText = JSON.stringify(hook) 대신 hook 객체 그대로 전달.
+
+5. Extended Thinking 켜줘. budget_tokens: 4096.
+   max_tokens도 16384로 올려.
+```
+
+### 10. 레퍼런스 코드 패턴 추가
+
+```
+System Prompt에 레퍼런스 코드 패턴 5개를 추가해줘.
+AI가 이 패턴을 빌딩 블록처럼 가져다 쓰도록.
+
+1. Delta Time 게임 루프 — requestAnimationFrame + dt 계산
+2. 터치/마우스 입력 정규화 — canvas 좌표 변환, 터치+마우스 동시 지원
+3. 스코어 팝업 애니메이션 — 점수 텍스트가 위로 떠오르며 사라짐
+4. 화면 흔들림 효과 — ctx.translate로 랜덤 흔들림, 감쇠
+5. 파티클 시스템 — 방사형 파티클, 생명주기 관리
+
+그리고 "흔한 실수 방지" 섹션도 넣어줘:
+- 단색 사각형으로만 그리지 말고 arc, 그라데이션, 디테일 추가
+- 매 프레임 clearRect 호출
+- setInterval 대신 rAF
+- 하드코딩 좌표 대신 비율 기반
+- 터치만 처리하고 마우스 빠뜨리지 않기
+- 배경 단색 금지, 그라데이션 필수
+- 게임 오버 후 CTA 오버레이 필수
+```
+
+### 11. 장르 확장
+
+```
+장르 2개 추가해줘: shooting(슈팅), rpg(RPG).
+
+shooting 가이드:
+- 화면 하단 플레이어 기체, 자동 총알 발사
+- 탭/드래그로 좌우 이동
+- 적이 위에서 내려옴, 총알 맞추면 점수
+- 적과 충돌하면 게임 오버
+
+rpg 가이드:
+- 플레이어와 적이 마주보는 구도
+- ATTACK, SKILL 버튼
+- 탭하면 데미지 숫자 팝업
+- 적 체력바 감소, 0이면 다음 적
+
+types.ts의 GameGenre 타입, GENRE_LABELS, GENRE_INTERACTION_GUIDE 전부 업데이트해줘.
+```
+
+### 12. User Prompt 품질 강화
+
+```
+User Prompt에 구체적인 품질 요구사항 추가해줘:
+
+인터랙션:
+- 유저 입력에 0.1초 내 시각적 피드백
+- 점수/콤보 시스템 (스코어 팝업 패턴 활용)
+- 성공 시 화면 흔들림+파티클, 실패 시 빨간 번쩍임
+- 화면에 항상 움직이는 요소 (배경 스크롤, 파티클 등)
+- 시간 따라 난이도 상승 (초반 5초는 천천히)
+
+게임 속도:
+- 전체 플레이 타임 30초 (15초는 너무 짧음)
+- 오브젝트 이동 속도: 화면 폭의 1~2%/프레임으로 시작
+- 장애물 등장 간격: 초반 1.5초 → 후반 0.8초
+
+비주얼:
+- 캐릭터/오브젝트를 Canvas 도형으로 정성껏
+- 그라데이션 배경 필수
+- 점수/메시지 텍스트 중앙 정렬, 그림자 효과
+- 수치의 시각적 표현: 스코어 증가 시 작은 오브젝트들이 바글바글 뭉쳐서 다중 렌더링
+
+필수 구조:
+1. "TAP TO PLAY" 오버레이
+2. 30초 게임 플레이
+3. CTA 오버레이 (반투명 + 큰 버튼)
+4. CTA 클릭 시 console.log("CTA_CLICKED")
+```
+
+### 13. UI/UX 개선
+
+```
+로딩 화면 개선해줘:
+- animate-pulse 대신 시간 기반 프로그레스 바 구현
+- 퍼센트 숫자 표시 (0% → 100%)
+- 분석 중 / 훅 설계 중 / 광고 생성 중 단계별 메시지 전환
+- 100% 도달 후 0.6초 대기 후 다음 단계로 전환
+- 스트리밍 텍스트 영역 넓고 높게 (max-w-2xl, max-h-80/96)
+
+ad-preview 개선해줘:
+- "다시 플레이" 버튼 추가 (iframe key 리마운트로 게임 재시작)
+- iframe에 allow-pointer-lock, autoplay, fullscreen 권한 추가
+
+upload-form 개선해줘:
+- 카드 헤더 아래에 안내 문구 추가
+- 핵심 메카닉 입력란 아래에 힌트 텍스트
+- 미입력 필드 안내 메시지 (제출 버튼 아래)
+
+analyze API 수정:
+- base64 data URL에서 실제 MIME 타입 추출 (jpeg, webp 등 지원)
+- 에러 시 Claude API 원본 에러 메시지 포함
+
+stream.ts 파서 수정:
+- toReadableStream()은 SSE가 아니라 줄바꿈 구분 JSON 라인 형식
+- SSE 파서에서 JSON 라인 파서로 변경
+
+미사용 framer-motion 패키지 제거해줘.
+```
+
+### 14. 모델 변경
+
+```
+claude.ts의 SONNET 모델을 "claude-sonnet-4-5"로 변경해줘.
+HAIKU는 "claude-haiku-4-5-20251001" 유지.
 ```
