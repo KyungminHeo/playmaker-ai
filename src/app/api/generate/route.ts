@@ -7,26 +7,30 @@
  */
 import { NextRequest } from "next/server";
 import anthropic, { MODELS } from "@/lib/claude";
-import { getGeneratePrompt } from "@/lib/prompts";
-import { GameGenre, AdTone } from "@/lib/types";
+import { getGenerateSystemPrompt, getGenerateUserPrompt } from "@/lib/prompts";
+import { GameGenre, AdTone, HookScenario } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   try {
     const { gameName, genre, analysis, hook, tone } = await req.json();
     const analysisText = JSON.stringify(analysis, null, 2);
-    const hookText = JSON.stringify(hook, null, 2);
 
     const stream = anthropic.messages.stream({
       model: MODELS.SONNET,
-      max_tokens: 8192,
+      max_tokens: 16384,
+      thinking: {
+        type: "enabled",
+        budget_tokens: 4096,
+      },
+      system: getGenerateSystemPrompt(genre as GameGenre),
       messages: [
         {
           role: "user",
-          content: getGeneratePrompt(
+          content: getGenerateUserPrompt(
             gameName,
             genre as GameGenre,
             analysisText,
-            hookText,
+            hook as HookScenario,
             tone as AdTone
           ),
         },

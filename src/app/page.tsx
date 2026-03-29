@@ -12,7 +12,7 @@
  */
 "use client"; // 이 컴포넌트는 브라우저에서 실행됨 (상태 관리, 이벤트 핸들링 필요)
 
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import UploadForm from "@/components/upload-form";
 import AnalysisCard from "@/components/analysis-card";
 import HookSelector from "@/components/hook-selector";
@@ -34,6 +34,38 @@ export default function Home() {
   const [generatedHTML, setGeneratedHTML] = useState("");   // 생성된 광고 HTML
   const [streamText, setStreamText] = useState("");         // Streaming 진행 상태 텍스트
   const [error, setError] = useState<string | null>(null);  // 에러 메시지
+  const [progress, setProgress] = useState(0);              // 진행률 (0~100)
+  const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 시간 기반 프로그레스: target%까지 자연스럽게 증가, 완료 시 100%로 점프
+  const startProgress = useCallback((from: number, target: number, durationSec: number) => {
+    if (progressTimer.current) clearInterval(progressTimer.current);
+    setProgress(from);
+    const steps = durationSec * 10; // 100ms 간격
+    const increment = (target - from) / steps;
+    let current = from;
+    progressTimer.current = setInterval(() => {
+      current += increment;
+      if (current >= target) {
+        current = target;
+        if (progressTimer.current) clearInterval(progressTimer.current);
+      }
+      setProgress(Math.round(current));
+    }, 100);
+  }, []);
+
+  const finishProgress = useCallback(() => {
+    if (progressTimer.current) clearInterval(progressTimer.current);
+    setProgress(100);
+  }, []);
+
+  // 단계 전환 전 100% 표시를 위한 딜레이
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => { if (progressTimer.current) clearInterval(progressTimer.current); };
+  }, []);
 
   // ============================================================
   // Step 1 → Step 2: 게임 정보 제출 → 스크린샷 분석 시작
@@ -43,9 +75,11 @@ export default function Home() {
     setStep("analyzing");      // 로딩 화면으로 전환
     setError(null);
     setStreamText("");
+    setProgress(0);
 
     try {
       // ---- 1단계: 스크린샷 분석 (/api/analyze) ----
+      startProgress(0, 45, 8); // 0→45%를 8초에 걸쳐 서서히
       const analyzeRes = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -54,21 +88,20 @@ export default function Home() {
 
       if (!analyzeRes.ok) throw new Error("분석 API 호출 실패");
 
-      // Streaming으로 응답 수신 — setStreamText 콜백으로 실시간 UI 업데이트
       const analyzeText = await readStream(analyzeRes, setStreamText);
-      // 응답 텍스트에서 JSON 부분만 추출 → AnalysisResult 타입으로 파싱
       const analysisData = extractJSON<AnalysisResult>(analyzeText);
       setAnalysis(analysisData);
 
       // ---- 2단계: 훅 시나리오 생성 (/api/hooks) ----
-      setStreamText(""); // 스트리밍 텍스트 초기화 (새 단계 시작)
+      setStreamText("");
+      startProgress(50, 95, 10); // 50→95%를 10초에 걸쳐
       const hooksRes = await fetch("/api/hooks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           gameName: input.gameName,
           genre: input.genre,
-          analysis: analysisData,  // 방금 받은 분석 결과 전달
+          analysis: analysisData,
           tone: input.tone,
         }),
       });
@@ -78,7 +111,9 @@ export default function Home() {
       const hooksText = await readStream(hooksRes, setStreamText);
       const hooksData = extractJSON<{ hooks: HookScenario[] }>(hooksText);
       setHooks(hooksData.hooks);
-      setStep("hooks"); // 훅 선택 단계로 전환
+      finishProgress();
+      await delay(600); // 100% 표시를 사용자가 확인할 수 있도록 잠시 대기
+      setStep("hooks");
     } catch (err) {
       setError(err instanceof Error ? err.message : "알 수 없는 에러가 발생했습니다.");
       setStep("input"); // 에러 발생 시 입력 화면으로 복귀
@@ -94,27 +129,30 @@ export default function Home() {
     setStep("generating");    // 생성 중 로딩 화면
     setError(null);
     setStreamText("");
+    setProgress(0);
 
     try {
+      startProgress(0, 90, 60); // 0→90%를 60초에 걸쳐 (코드 생성은 오래 걸림)
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           gameName: gameInput.gameName,
           genre: gameInput.genre,
-          analysis,           // 분석 결과
-          hook,               // 선택한 훅 시나리오
+          analysis,
+          hook,
           tone: gameInput.tone,
         }),
       });
 
       if (!res.ok) throw new Error("광고 생성 API 호출 실패");
 
-      // Streaming으로 코드 수신 — 코드가 길어서 30~90초 소요 가능
       const genText = await readStream(res, setStreamText);
       // 응답에서 ```html ... ``` 코드블록 추출
       const html = extractHTML(genText);
       setGeneratedHTML(html);
+      finishProgress();
+      await delay(600); // 100% 표시를 사용자가 확인할 수 있도록 잠시 대기
       setStep("preview"); // 미리보기 단계로 전환
     } catch (err) {
       setError(err instanceof Error ? err.message : "알 수 없는 에러가 발생했습니다.");
@@ -177,14 +215,24 @@ export default function Home() {
 
         {/* ========== Step 2: AI 분석 중 (로딩 상태) ========== */}
         {step === "analyzing" && (
-          <div className="text-center py-16">
-            {/* animate-pulse: 1초 주기로 투명도가 변하는 애니메이션 */}
-            <div className="animate-pulse text-lg font-medium mb-4">
-              AI가 게임을 분석하고 있습니다...
+          <div className="py-8">
+            {/* 단계 표시 + 퍼센트 */}
+            <div className="text-center mb-6">
+              <div className="text-lg font-medium mb-1">
+                {progress < 50 ? "🔍 스크린샷을 분석하고 있습니다..." : "✍️ 훅 시나리오를 설계하고 있습니다..."}
+              </div>
+              <div className="text-2xl font-bold text-primary">{progress}%</div>
             </div>
-            {/* Streaming 텍스트 실시간 표시 */}
+            {/* 프로그레스 바 */}
+            <div className="w-full max-w-lg mx-auto bg-muted rounded-full h-3 mb-6">
+              <div
+                className="bg-primary h-3 rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            {/* Streaming 텍스트 실시간 표시 — 넓고 높게 */}
             {streamText && (
-              <pre className="text-xs text-muted-foreground max-w-lg mx-auto text-left bg-muted p-4 rounded-lg overflow-auto max-h-48">
+              <pre className="text-sm text-muted-foreground max-w-2xl mx-auto text-left bg-muted p-4 rounded-lg overflow-auto max-h-80">
                 {streamText}
               </pre>
             )}
@@ -202,13 +250,25 @@ export default function Home() {
 
         {/* ========== Step 4-1: 광고 코드 생성 중 ========== */}
         {step === "generating" && (
-          <div className="text-center py-16">
-            <div className="animate-pulse text-lg font-medium mb-4">
-              플레이어블 광고를 생성하고 있습니다...
+          <div className="py-8">
+            {/* 단계 표시 + 퍼센트 */}
+            <div className="text-center mb-6">
+              <div className="text-lg font-medium mb-1">
+                🎮 플레이어블 광고를 생성하고 있습니다...
+              </div>
+              <div className="text-2xl font-bold text-primary">{progress}%</div>
             </div>
+            {/* 프로그레스 바 */}
+            <div className="w-full max-w-lg mx-auto bg-muted rounded-full h-3 mb-6">
+              <div
+                className="bg-primary h-3 rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            {/* Streaming 코드 실시간 표시 — 넓고 높게, 최근 코드만 */}
             {streamText && (
-              <pre className="text-xs text-muted-foreground max-w-lg mx-auto text-left bg-muted p-4 rounded-lg overflow-auto max-h-48">
-                {streamText.slice(-500)}
+              <pre className="text-sm text-muted-foreground max-w-2xl mx-auto text-left bg-muted p-4 rounded-lg overflow-auto max-h-96 font-mono">
+                {streamText.slice(-1500)}
               </pre>
             )}
           </div>

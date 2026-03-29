@@ -78,6 +78,10 @@ export default function UploadForm({ onSubmit }: UploadFormProps) {
           <Gamepad2 className="w-5 h-5" />
           게임 정보 입력
         </CardTitle>
+        {/* 입력 안내 — 처음 사용하는 심사관을 위한 설명 */}
+        <p className="text-sm text-muted-foreground">
+          게임 스크린샷과 기본 정보를 입력하면 AI가 플레이어블 광고를 자동 생성합니다.
+        </p>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -172,22 +176,38 @@ export default function UploadForm({ onSubmit }: UploadFormProps) {
             <Label htmlFor="mechanic">핵심 메카닉</Label>
             <Textarea
               id="mechanic"
-              placeholder="예: 화면을 탭하면 캐릭터가 점프하여 장애물을 피합니다."
+              placeholder="예: 화면을 탭하면 캐릭터가 점프하여 장애물을 피합니다. 코인을 모으면 점수가 올라갑니다."
               value={mechanic}
               onChange={(e) => setMechanic(e.target.value)}
               required
               rows={3}
             />
+            {/* 입력 힌트 — 어떤 내용을 쓰면 좋은지 안내 */}
+            <p className="text-xs text-muted-foreground">
+              유저의 주요 조작 방식과 게임 목표를 간단히 설명해주세요.
+            </p>
           </div>
 
-          {/* 제출 버튼 */}
+          {/* 제출 버튼 — 미입력 항목 안내 포함 */}
           <Button
             type="submit"
             className="w-full"
+            size="lg"
             disabled={!gameName || screenshots.length === 0 || !mechanic}
           >
             AI 분석 시작
           </Button>
+          {/* 미입력 필드가 있을 때 안내 메시지 표시 */}
+          {(!gameName || screenshots.length === 0 || !mechanic) && (
+            <p className="text-xs text-muted-foreground text-center">
+              {[
+                !gameName && "게임 이름",
+                screenshots.length === 0 && "스크린샷",
+                !mechanic && "핵심 메카닉",
+              ].filter(Boolean).join(", ")}
+              을(를) 입력해주세요
+            </p>
+          )}
         </form>
       </CardContent>
     </Card>

@@ -32,25 +32,21 @@ export async function readStream(
 
     buffer += decoder.decode(value, { stream: true });
 
-    // SSE 이벤트는 빈 줄("\n\n")로 구분됨
-    const events = buffer.split("\n\n");
-    buffer = events.pop() || "";
+    // toReadableStream()은 줄바꿈 구분 JSON 형식으로 출력
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || ""; // 마지막 미완성 줄은 버퍼에 보관
 
-    for (const event of events) {
-      const lines = event.split("\n");
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            // "content_block_delta" 이벤트에서 실제 텍스트 토큰 추출
-            if (data.type === "content_block_delta" && data.delta?.text) {
-              accumulated += data.delta.text;
-              onPartial?.(accumulated); // UI 실시간 업데이트
-            }
-          } catch {
-            // JSON 파싱 실패 무시 (다른 이벤트 타입)
-          }
+    for (const line of lines) {
+      if (!line.trim()) continue; // 빈 줄 무시
+      try {
+        const data = JSON.parse(line);
+        // "content_block_delta" 이벤트에서 실제 텍스트 토큰 추출
+        if (data.type === "content_block_delta" && data.delta?.text) {
+          accumulated += data.delta.text;
+          onPartial?.(accumulated); // UI 실시간 업데이트
         }
+      } catch {
+        // JSON 파싱 실패 무시 (다른 이벤트 타입)
       }
     }
   }

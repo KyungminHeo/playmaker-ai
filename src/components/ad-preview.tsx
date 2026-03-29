@@ -6,11 +6,11 @@
  */
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download, RotateCcw, Smartphone, Monitor } from "lucide-react";
+import { Download, RotateCcw, Smartphone, Monitor, Play } from "lucide-react";
 
 interface AdPreviewProps {
   html: string;           // 생성된 HTML 코드
@@ -20,6 +20,11 @@ interface AdPreviewProps {
 
 export default function AdPreview({ html, gameName, onReset }: AdPreviewProps) {
   const [viewMode, setViewMode] = useState<"mobile" | "desktop">("mobile");
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [iframeKey, setIframeKey] = useState(0); // key 변경으로 iframe 리로드
+
+  // 게임 다시 시작 — iframe을 리마운트하여 처음부터 재실행
+  const handleReplay = () => setIframeKey((k) => k + 1);
 
   // HTML 파일 다운로드
   const handleDownload = () => {
@@ -40,13 +45,17 @@ export default function AdPreview({ html, gameName, onReset }: AdPreviewProps) {
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">플레이어블 광고 미리보기</h2>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleReplay}>
+            <Play className="w-4 h-4 mr-1" />
+            다시 플레이
+          </Button>
           <Button variant="outline" onClick={onReset}>
             <RotateCcw className="w-4 h-4 mr-1" />
-            다시 만들기
+            새로 만들기
           </Button>
           <Button onClick={handleDownload}>
             <Download className="w-4 h-4 mr-1" />
-            HTML 다운로드
+            다운로드
           </Button>
         </div>
       </div>
@@ -72,12 +81,16 @@ export default function AdPreview({ html, gameName, onReset }: AdPreviewProps) {
              * sandbox: JS 실행 허용, 동일 출처 허용
              */}
             <iframe
+              key={iframeKey}
+              ref={iframeRef}
               srcDoc={html}
               className={`border rounded-lg bg-white ${
                 viewMode === "mobile" ? "w-[320px] h-[480px]" : "w-full h-[480px]"
               }`}
               title="플레이어블 광고 미리보기"
-              sandbox="allow-scripts allow-same-origin"
+              sandbox="allow-scripts allow-same-origin allow-pointer-lock"
+              allow="autoplay; fullscreen"
+              tabIndex={0}
             />
           </div>
           <p className="text-xs text-muted-foreground mt-2 text-center">

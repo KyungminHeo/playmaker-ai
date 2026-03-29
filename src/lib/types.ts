@@ -6,7 +6,7 @@
 // ============================================================
 // 게임 장르 — 입력 폼의 장르 선택 드롭다운에 사용
 // ============================================================
-export type GameGenre = "runner" | "puzzle" | "merge" | "idle" | "tap";
+export type GameGenre = "runner" | "puzzle" | "merge" | "idle" | "tap" | "shooting" | "rpg";
 
 // 장르 한글 레이블 매핑 (UI 표시용)
 export const GENRE_LABELS: Record<GameGenre, string> = {
@@ -15,6 +15,8 @@ export const GENRE_LABELS: Record<GameGenre, string> = {
   merge: "머지",
   idle: "아이들",
   tap: "탭",
+  shooting: "슈팅",
+  rpg: "RPG",
 };
 
 // ============================================================
@@ -60,6 +62,8 @@ export interface HookScenario {
   id: "A" | "B" | "C";       // 훅 식별자
   type: string;               // 훅 유형 (예: "실패 유도형", "성공 과시형")
   scenario: string;           // 상세 시나리오 설명
+  gameplay_modifier?: string; // AI가 스스로 작성하는 핵심 로직 덮어쓰기 지시
+  visual_modifier?: string;   // AI가 스스로 작성하는 비주얼 덮어쓰기 지시
   cta: string;                // Call-to-Action 문구 (예: "Play Now!")
   duration: number;           // 광고 재생 시간 (초)
 }
