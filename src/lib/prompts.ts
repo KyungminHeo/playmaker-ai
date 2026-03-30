@@ -157,11 +157,30 @@ export function getGenerateSystemPrompt(genre: GameGenre): string {
 - 모바일 터치(touchstart/touchmove/touchend) + 데스크탑 마우스(mousedown/mousemove/mouseup) 모두 지원
 - **[필수] canvas와 body에 CSS \`touch-action: none; user-select: none;\` 설정** — 이것이 없으면 모바일에서 터치 이벤트가 브라우저에 의해 가로채여 게임에 전달되지 않음
 - **[필수] 이벤트 리스너는 게임 시작 전("TAP TO PLAY" 표시 시점)에 canvas에 등록** — 게임 시작 후가 아님
-- 뷰포트: 320x480 기준 (세로 모드), canvas 크기 동적 스케일링
+- 뷰포트: canvas 내부 해상도는 320x480 고정, **CSS로 window 크기에 맞게 스케일링** (종횡비 유지하며 화면 가득 채움)
 - delta time 기반 물리 업데이트 (프레임 독립적)
 - 60fps 유지
 
 ## 레퍼런스 코드 패턴 (이 패턴들을 빌딩 블록으로 활용):
+
+### 패턴 0: Canvas 반응형 스케일링 (필수 적용)
+\`\`\`javascript
+const W = 320, H = 480;
+canvas.width = W;
+canvas.height = H;
+function resizeCanvas() {
+  const ratio = W / H;
+  let w = window.innerWidth, h = window.innerHeight;
+  if (w / h > ratio) { w = h * ratio; } else { h = w / ratio; }
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  canvas.style.position = 'absolute';
+  canvas.style.left = ((window.innerWidth - w) / 2) + 'px';
+  canvas.style.top = ((window.innerHeight - h) / 2) + 'px';
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+\`\`\`
 
 ### 패턴 1: Delta Time 게임 루프
 \`\`\`javascript
@@ -252,7 +271,8 @@ ${GENRE_INTERACTION_GUIDE[genre]}
 - ❌ canvas에 touch-action: none 빠뜨리기 → ✅ canvas와 body에 touch-action: none 필수 (없으면 모바일 터치 안 됨!)
 - ❌ 이벤트 리스너를 게임 시작 후에 등록 → ✅ 초기화 시점에 canvas에 등록 (TAP TO PLAY 탭도 같은 리스너로 처리)
 - ❌ touchmove에 passive: false 빠뜨리기 → ✅ touchstart와 touchmove 모두 { passive: false } 필수
-- ❌ getPos에서 e.preventDefault() 빠뜨리기 → ✅ 터치 핸들러에서 반드시 e.preventDefault() 호출`;
+- ❌ getPos에서 e.preventDefault() 빠뜨리기 → ✅ 터치 핸들러에서 반드시 e.preventDefault() 호출
+- ❌ canvas 크기를 CSS 없이 고정 (320x480 픽셀 그대로) → ✅ 내부 해상도는 320x480 고정, CSS로 window에 맞게 스케일링 (패턴 0 필수 적용)`;
 }
 
 // ============================================================
