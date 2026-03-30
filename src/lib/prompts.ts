@@ -154,7 +154,7 @@ export function getGenerateSystemPrompt(genre: GameGenre): string {
 - 단일 HTML 파일 (외부 CDN/라이브러리 의존 절대 없음)
 - Canvas 2D 기반 렌더링 권장 (복잡한 게임은 Canvas 필수)
 - requestAnimationFrame 기반 게임 루프 (setInterval 사용 금지)
-- 모바일 터치(touchstart/touchmove/touchend) + 데스크탑 마우스(mousedown/mousemove/mouseup) 모두 지원
+- 모바일 터치(touchstart/touchmove/touchend) + 데스크탑 마우스(mousedown/mousemove/mouseup) 및 **키보드(keydown/keyup 방향키)** 모두 필수 지원
 - **[필수] canvas와 body에 CSS \`touch-action: none; user-select: none;\` 설정** — 이것이 없으면 모바일에서 터치 이벤트가 브라우저에 의해 가로채여 게임에 전달되지 않음
 - **[필수] 이벤트 리스너는 게임 시작 전("TAP TO PLAY" 표시 시점)에 canvas에 등록** — 게임 시작 후가 아님
 - 뷰포트: canvas 내부 해상도는 320x480 고정, **CSS로 window 크기에 맞게 스케일링** (종횡비 유지하며 화면 가득 채움)
@@ -221,31 +221,38 @@ function gameLoop(timestamp) {
 }
 \`\`\`
 
-### 패턴 2: 터치/마우스 입력 정규화
+### 패턴 2: 터치/마우스/키보드 입력 정규화
 \`\`\`javascript
-// [필수] 터치 입력이 작동하려면 반드시 아래 CSS 설정 필요
-canvas.style.touchAction = 'none';   // 브라우저 기본 터치 동작 차단
-canvas.style.userSelect = 'none';    // 텍스트 선택 방지
+// [필수] 터치 입력 작동을 위한 CSS 설정
+canvas.style.touchAction = 'none';
+canvas.style.userSelect = 'none';
 document.body.style.touchAction = 'none';
-document.body.style.overflow = 'hidden';  // 스크롤 방지
-document.body.style.margin = '0';
+document.body.style.overflow = 'hidden';
 
 function getPos(e) {
-  e.preventDefault();  // 기본 동작 차단 (스크롤 등)
+  if (e.cancelable !== false) e.preventDefault();
   const rect = canvas.getBoundingClientRect();
-  const t = e.touches ? e.touches[0] : e;
+  let cx = e.clientX, cy = e.clientY;
+  if (e.touches && e.touches.length > 0) {
+    cx = e.touches[0].clientX; cy = e.touches[0].clientY;
+  } else if (e.changedTouches && e.changedTouches.length > 0) {
+    cx = e.changedTouches[0].clientX; cy = e.changedTouches[0].clientY;
+  } // else: 마우스 이벤트
   return {
-    x: (t.clientX - rect.left) * (canvas.width / rect.width),
-    y: (t.clientY - rect.top) * (canvas.height / rect.height)
+    x: (cx - rect.left) * (canvas.width / rect.width),
+    y: (cy - rect.top) * (canvas.height / rect.height)
   };
 }
-// 이벤트 리스너는 게임 초기화 시점에 등록 (게임 시작 전)
+// 리스너 등록
 canvas.addEventListener('touchstart', handler, { passive: false });
 canvas.addEventListener('touchmove', handler, { passive: false });
 canvas.addEventListener('touchend', handler);
 canvas.addEventListener('mousedown', handler);
 canvas.addEventListener('mousemove', handler);
 canvas.addEventListener('mouseup', handler);
+// [필수] 키보드 (방향키 활용 등)
+window.addEventListener('keydown', keydownHandler);
+window.addEventListener('keyup', keyupHandler);
 \`\`\`
 
 ### 패턴 3: 스코어 팝업 애니메이션
@@ -291,7 +298,7 @@ ${GENRE_INTERACTION_GUIDE[genre]}
 - ❌ canvas를 매 프레임 clear하지 않기 → ✅ 매 프레임 clearRect(0,0,W,H) 호출
 - ❌ setInterval로 게임 루프 돌리기 → ✅ requestAnimationFrame + delta time
 - ❌ 하드코딩된 픽셀 좌표 → ✅ canvas.width/height 비율 기반 좌표
-- ❌ 터치 이벤트만 처리하고 마우스 이벤트 빠뜨리기 → ✅ 둘 다 처리
+- ❌ 터치 이벤트만 처리하고 마우스/키보드 이벤트 빠뜨리기 → ✅ 터치, 마우스, 그리고 키보드(keydown/keyup) 모두 완벽히 처리
 - ❌ 배경을 단색으로 채우기 → ✅ 그라데이션 배경 필수
 - ❌ 텍스트가 화면 밖으로 넘침 → ✅ 텍스트 중앙 정렬, maxWidth 적용
 - ❌ SCORE와 TIME 텍스트를 같은 위치에 그려서 겹침 → ✅ 점수는 좌측(textAlign left), 시간은 우측(textAlign right)으로 분리 (패턴 0-1 필수 적용)
@@ -301,7 +308,8 @@ ${GENRE_INTERACTION_GUIDE[genre]}
 - ❌ 이벤트 리스너를 게임 시작 후에 등록 → ✅ 초기화 시점에 canvas에 등록 (TAP TO PLAY 탭도 같은 리스너로 처리)
 - ❌ touchmove에 passive: false 빠뜨리기 → ✅ touchstart와 touchmove 모두 { passive: false } 필수
 - ❌ getPos에서 e.preventDefault() 빠뜨리기 → ✅ 터치 핸들러에서 반드시 e.preventDefault() 호출
-- ❌ canvas 크기를 CSS 없이 고정 (320x480 픽셀 그대로) → ✅ 내부 해상도는 320x480 고정, CSS로 window에 맞게 스케일링 (패턴 0 필수 적용)`;
+- ❌ canvas 크기를 CSS 없이 고정 (320x480 픽셀 그대로) → ✅ 내부 해상도는 320x480 고정, CSS로 window에 맞게 스케일링 (패턴 0 필수 적용)
+- ❌ 오버레이(TAP TO PLAY)가 이벤트를 덮어서 캔버스 클릭이 불가 → ✅ 오버레이 클릭 시 오버레이 DOM 자체를 삭제(remove)하거나 \`pointer-events: none\` 설정 필수`;
 }
 
 // ============================================================
