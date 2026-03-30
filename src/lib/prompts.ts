@@ -180,6 +180,33 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
+// body 배경색을 게임 배경과 동일하게 설정 (검은 여백 방지)
+document.body.style.backgroundColor = '#게임배경색';
+\`\`\`
+
+### 패턴 0-1: HUD 레이아웃 (점수/시간 겹침 방지, 필수 적용)
+\`\`\`javascript
+// HUD는 화면 상단에 좌-우로 분리 배치 (절대 겹치지 않게)
+function drawHUD() {
+  ctx.save();
+  ctx.font = 'bold 14px sans-serif';   // 320x480 기준 14px 적정 (너무 크면 겹침!)
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 3;
+  // 왼쪽: 점수
+  ctx.textAlign = 'left';
+  ctx.strokeText('Score: ' + score, 10, 24);
+  ctx.fillText('Score: ' + score, 10, 24);
+  // 오른쪽: 시간
+  ctx.textAlign = 'right';
+  ctx.strokeText(timeLeft + 's', W - 10, 24);
+  ctx.fillText(timeLeft + 's', W - 10, 24);
+  // 중앙: 레벨 (필요 시)
+  ctx.textAlign = 'center';
+  ctx.strokeText('LV ' + level, W / 2, 24);
+  ctx.fillText('LV ' + level, W / 2, 24);
+  ctx.restore();
+}
 \`\`\`
 
 ### 패턴 1: Delta Time 게임 루프
@@ -267,6 +294,8 @@ ${GENRE_INTERACTION_GUIDE[genre]}
 - ❌ 터치 이벤트만 처리하고 마우스 이벤트 빠뜨리기 → ✅ 둘 다 처리
 - ❌ 배경을 단색으로 채우기 → ✅ 그라데이션 배경 필수
 - ❌ 텍스트가 화면 밖으로 넘침 → ✅ 텍스트 중앙 정렬, maxWidth 적용
+- ❌ SCORE와 TIME 텍스트를 같은 위치에 그려서 겹침 → ✅ 점수는 좌측(textAlign left), 시간은 우측(textAlign right)으로 분리 (패턴 0-1 필수 적용)
+- ❌ HUD 폰트를 20px 이상으로 크게 → ✅ 320x480 기준 14px, 스코어 팝업은 최대 18px
 - ❌ 게임 오버 후 아무 반응 없음 → ✅ 반드시 CTA 오버레이 표시
 - ❌ canvas에 touch-action: none 빠뜨리기 → ✅ canvas와 body에 touch-action: none 필수 (없으면 모바일 터치 안 됨!)
 - ❌ 이벤트 리스너를 게임 시작 후에 등록 → ✅ 초기화 시점에 canvas에 등록 (TAP TO PLAY 탭도 같은 리스너로 처리)
@@ -316,7 +345,8 @@ export function getGenerateUserPrompt(
 ## 비주얼 품질 (핵심):
 - 캐릭터/오브젝트는 Canvas 도형으로 정성껏 (arc, 그라데이션, 눈/입 등 디테일)
 - 그라데이션 배경 필수 (단색 금지)
-- 점수/메시지 텍스트: 중앙 정렬, 테두리/그림자 효과, max-width 90%
+- **HUD 텍스트 레이아웃**: 점수는 좌측 상단, 시간은 우측 상단에 분리 배치 (절대 겹치지 않게!), 폰트 크기 14px (패턴 0-1 참고)
+- 점수/메시지 텍스트: 테두리(strokeText) + 채우기(fillText) 효과
 - ⭐️ **[가장 중요] 수치의 시각적 표현**: 유저 스코어나 군중 숫자 증가 시, 텍스트만이 아닌 Canvas 안에 **실제로 작고 귀여운 오브젝트들이 바글바글하게 뭉쳐서 함께 이동하도록 다중 렌더링**. 숫자가 커지면 군중 무리의 시각적 규모도 커져야 함.
 
 ## 필수 구조 (이 순서대로):

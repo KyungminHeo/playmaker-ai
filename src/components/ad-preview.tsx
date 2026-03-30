@@ -85,7 +85,7 @@ export default function AdPreview({ html, gameName, onReset }: AdPreviewProps) {
               ref={iframeRef}
               srcDoc={html}
               className={`border rounded-lg bg-white ${
-                viewMode === "mobile" ? "w-[320px] h-[480px]" : "w-full h-[480px]"
+                viewMode === "mobile" ? "w-[320px] h-[480px]" : "w-[400px] h-[600px]"
               }`}
               title="플레이어블 광고 미리보기"
               sandbox="allow-scripts allow-same-origin allow-pointer-lock"
