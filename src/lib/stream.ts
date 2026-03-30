@@ -55,19 +55,57 @@ export async function readStream(
 }
 
 /**
+ * Claude가 JSON 문자열 값 안에 리터럴 줄바꿈/탭을 넣는 경우 수정
+ * JSON spec상 문자열 내부의 리터럴 제어 문자는 \n, \t 등으로 이스케이프해야 함
+ */
+function sanitizeJSON(raw: string): string {
+  let result = "";
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      result += ch;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+    // 문자열 내부의 리터럴 제어 문자 → 이스케이프 시퀀스로 교체
+    if (inString) {
+      if (ch === "\n") { result += "\\n"; continue; }
+      if (ch === "\r") { result += "\\r"; continue; }
+      if (ch === "\t") { result += "\\t"; continue; }
+    }
+    result += ch;
+  }
+  return result;
+}
+
+/**
  * Claude 응답에서 JSON 추출
- * Claude가 JSON 앞뒤에 텍스트를 붙이는 경우 대비
+ * Claude가 JSON 앞뒤에 텍스트를 붙이거나 문자열 내부에 리터럴 줄바꿈을 넣는 경우 대비
  */
 export function extractJSON<T>(text: string): T {
   const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {
-    return JSON.parse(codeBlockMatch[1].trim());
+    return JSON.parse(sanitizeJSON(codeBlockMatch[1].trim()));
   }
 
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start !== -1 && end !== -1) {
-    return JSON.parse(text.slice(start, end + 1));
+    return JSON.parse(sanitizeJSON(text.slice(start, end + 1)));
   }
 
   throw new Error("응답에서 JSON을 찾을 수 없습니다.");
