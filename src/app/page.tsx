@@ -131,6 +131,8 @@ export default function Home() {
     setStreamText("");
     setProgress(0);
 
+    const genStartTime = performance.now(); // 생성 소요 시간 측정 시작
+
     try {
       startProgress(0, 90, 60); // 0→90%를 60초에 걸쳐 (코드 생성은 오래 걸림)
       const res = await fetch("/api/generate", {
@@ -152,6 +154,21 @@ export default function Home() {
       const html = extractHTML(genText);
       setGeneratedHTML(html);
       finishProgress();
+
+      // 생성 완료 이메일 알림 (fire-and-forget — 실패해도 사용자 플로우에 영향 없음)
+      const elapsed = ((performance.now() - genStartTime) / 1000).toFixed(1);
+      fetch("/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          gameName: gameInput.gameName,
+          genre: gameInput.genre,
+          tone: gameInput.tone,
+          generationTime: `${elapsed}초`,
+          userAgent: navigator.userAgent,
+        }),
+      }).catch(() => {}); // 이메일 실패는 무시
+
       await delay(600); // 100% 표시를 사용자가 확인할 수 있도록 잠시 대기
       setStep("preview"); // 미리보기 단계로 전환
     } catch (err) {
