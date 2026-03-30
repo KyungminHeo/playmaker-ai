@@ -91,6 +91,7 @@ export default function AdPreview({ html, gameName, onReset }: AdPreviewProps) {
               sandbox="allow-scripts allow-same-origin allow-pointer-lock"
               allow="autoplay; fullscreen"
               tabIndex={0}
+              style={{ touchAction: "none" }}
             />
           </div>
           <p className="text-xs text-muted-foreground mt-2 text-center">

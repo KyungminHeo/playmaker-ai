@@ -155,6 +155,8 @@ export function getGenerateSystemPrompt(genre: GameGenre): string {
 - Canvas 2D 기반 렌더링 권장 (복잡한 게임은 Canvas 필수)
 - requestAnimationFrame 기반 게임 루프 (setInterval 사용 금지)
 - 모바일 터치(touchstart/touchmove/touchend) + 데스크탑 마우스(mousedown/mousemove/mouseup) 모두 지원
+- **[필수] canvas와 body에 CSS \`touch-action: none; user-select: none;\` 설정** — 이것이 없으면 모바일에서 터치 이벤트가 브라우저에 의해 가로채여 게임에 전달되지 않음
+- **[필수] 이벤트 리스너는 게임 시작 전("TAP TO PLAY" 표시 시점)에 canvas에 등록** — 게임 시작 후가 아님
 - 뷰포트: 320x480 기준 (세로 모드), canvas 크기 동적 스케일링
 - delta time 기반 물리 업데이트 (프레임 독립적)
 - 60fps 유지
@@ -175,7 +177,15 @@ function gameLoop(timestamp) {
 
 ### 패턴 2: 터치/마우스 입력 정규화
 \`\`\`javascript
+// [필수] 터치 입력이 작동하려면 반드시 아래 CSS 설정 필요
+canvas.style.touchAction = 'none';   // 브라우저 기본 터치 동작 차단
+canvas.style.userSelect = 'none';    // 텍스트 선택 방지
+document.body.style.touchAction = 'none';
+document.body.style.overflow = 'hidden';  // 스크롤 방지
+document.body.style.margin = '0';
+
 function getPos(e) {
+  e.preventDefault();  // 기본 동작 차단 (스크롤 등)
   const rect = canvas.getBoundingClientRect();
   const t = e.touches ? e.touches[0] : e;
   return {
@@ -183,8 +193,13 @@ function getPos(e) {
     y: (t.clientY - rect.top) * (canvas.height / rect.height)
   };
 }
+// 이벤트 리스너는 게임 초기화 시점에 등록 (게임 시작 전)
 canvas.addEventListener('touchstart', handler, { passive: false });
+canvas.addEventListener('touchmove', handler, { passive: false });
+canvas.addEventListener('touchend', handler);
 canvas.addEventListener('mousedown', handler);
+canvas.addEventListener('mousemove', handler);
+canvas.addEventListener('mouseup', handler);
 \`\`\`
 
 ### 패턴 3: 스코어 팝업 애니메이션
@@ -233,7 +248,11 @@ ${GENRE_INTERACTION_GUIDE[genre]}
 - ❌ 터치 이벤트만 처리하고 마우스 이벤트 빠뜨리기 → ✅ 둘 다 처리
 - ❌ 배경을 단색으로 채우기 → ✅ 그라데이션 배경 필수
 - ❌ 텍스트가 화면 밖으로 넘침 → ✅ 텍스트 중앙 정렬, maxWidth 적용
-- ❌ 게임 오버 후 아무 반응 없음 → ✅ 반드시 CTA 오버레이 표시`;
+- ❌ 게임 오버 후 아무 반응 없음 → ✅ 반드시 CTA 오버레이 표시
+- ❌ canvas에 touch-action: none 빠뜨리기 → ✅ canvas와 body에 touch-action: none 필수 (없으면 모바일 터치 안 됨!)
+- ❌ 이벤트 리스너를 게임 시작 후에 등록 → ✅ 초기화 시점에 canvas에 등록 (TAP TO PLAY 탭도 같은 리스너로 처리)
+- ❌ touchmove에 passive: false 빠뜨리기 → ✅ touchstart와 touchmove 모두 { passive: false } 필수
+- ❌ getPos에서 e.preventDefault() 빠뜨리기 → ✅ 터치 핸들러에서 반드시 e.preventDefault() 호출`;
 }
 
 // ============================================================
@@ -281,10 +300,12 @@ export function getGenerateUserPrompt(
 - ⭐️ **[가장 중요] 수치의 시각적 표현**: 유저 스코어나 군중 숫자 증가 시, 텍스트만이 아닌 Canvas 안에 **실제로 작고 귀여운 오브젝트들이 바글바글하게 뭉쳐서 함께 이동하도록 다중 렌더링**. 숫자가 커지면 군중 무리의 시각적 규모도 커져야 함.
 
 ## 필수 구조 (이 순서대로):
-1. "TAP TO PLAY" 오버레이 (탭하면 게임 시작)
-2. 30초 게임 플레이
-3. 30초 후 CTA 오버레이 (반투명 배경 + 큰 버튼)
-4. CTA 버튼 클릭 시 console.log("CTA_CLICKED") 호출
+1. HTML <style>에 \`* { touch-action: none; user-select: none; } body { margin: 0; overflow: hidden; }\` 포함
+2. canvas 생성 직후 이벤트 리스너 등록 (touchstart/touchmove/touchend + mousedown/mousemove/mouseup), passive: false 옵션 필수
+3. "TAP TO PLAY" 오버레이 (탭/클릭하면 게임 시작) — canvas 위에 그리거나 별도 div로 구현
+4. 30초 게임 플레이
+5. 30초 후 CTA 오버레이 (반투명 배경 + 큰 버튼)
+6. CTA 버튼 클릭 시 console.log("CTA_CLICKED") 호출
 
 HTML 코드만 출력하세요. \`\`\`html 코드블록으로 감싸세요. 설명이나 주석 외 텍스트는 포함하지 마세요. 반드시 <!DOCTYPE html>로 시작하는 완전한 HTML5 문서여야 합니다.`;
 }
